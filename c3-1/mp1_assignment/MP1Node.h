@@ -14,6 +14,7 @@
 #include "Member.h"
 #include "EmulNet.h"
 #include "Queue.h"
+#include <byteswap.h>
 
 /**
  * Macros
@@ -31,6 +32,7 @@
 enum MsgTypes{
     JOINREQ,
     JOINREP,
+    TEST,
     DUMMYLASTMSGTYPE
 };
 
@@ -41,7 +43,45 @@ enum MsgTypes{
  */
 typedef struct MessageHdr {
 	enum MsgTypes msgType;
-}MessageHdr;
+} MessageHdr;
+
+/**
+ * STRUCT NAME: MemberInfo
+ *
+ * DESCRIPTION: Address and heartbeat
+ */
+typedef struct IdPort {
+	int getId() {return __bswap_32(_id); };
+	void setId(int id) {_id = __bswap_32(id); };
+	short getPort() { return __bswap_16(_port); };
+	void setPort(short port) { _port = __bswap_16(port); };
+private:
+	int _id;
+	short _port;
+} IdPort;
+
+typedef struct MemberInfo {
+	int id;
+	short int port;
+	long heartbeat;
+} MemberInfo;
+
+typedef struct TestPkg {
+	MessageHdr hdr;
+	Address adr;
+} TestPkg;
+
+typedef struct JoinReqPkg {
+	MessageHdr hdr;
+	Address adr;
+	long hrt;
+} JoinReqPkg;
+
+typedef struct JoinRepPkg {
+	MessageHdr hdr;
+	size_t n;
+	MemberInfo members[];
+} JoinRepPkg;
 
 /**
  * CLASS NAME: MP1Node

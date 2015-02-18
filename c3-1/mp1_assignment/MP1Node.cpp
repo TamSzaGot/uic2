@@ -6,6 +6,7 @@
  **********************************/
 
 #include "MP1Node.h"
+#include <byteswap.h>
 
 /*
  * Note: You can change/add any functions in MP1Node.{h,cpp}
@@ -96,9 +97,6 @@ int MP1Node::initThisNode(Address *joinaddr) {
 	/*
 	 * This function is partially implemented and may require changes
 	 */
-	int id = *(int*)(&memberNode->addr.addr);
-	int port = *(short*)(&memberNode->addr.addr[4]);
-
 	memberNode->bFailed = false;
 	memberNode->inited = true;
 	memberNode->inGroup = false;
@@ -122,13 +120,24 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
 #ifdef DEBUGLOG
     static char s[1024];
 #endif
-
-    if ( 0 == strcmp((char *)&(memberNode->addr.addr), (char *)&(joinaddr->addr))) {
+    if ( memberNode->addr == *joinaddr) {
         // I am the group booter (first process to join the group). Boot up the group
 #ifdef DEBUGLOG
         log->LOG(&memberNode->addr, "Starting up group...");
 #endif
         memberNode->inGroup = true;
+
+        IdPort idPort = *(IdPort*)memberNode->addr.addr;
+		memberNode->memberList.push_back(MemberListEntry(idPort.getId(), idPort.getPort()));
+
+		// send test message to myself
+        emulNet->ENsend(&memberNode->addr, joinaddr, "abcdefghijklmnopqrstuvxyz", 26);
+
+        TestPkg testPkg;
+        testPkg.hdr.msgType = TEST;
+        testPkg.adr = *joinaddr;
+        emulNet->ENsend(&memberNode->addr, joinaddr, (char*) &testPkg, sizeof(TestPkg));
+
     }
     else {
         size_t msgsize = sizeof(MessageHdr) + sizeof(joinaddr->addr) + sizeof(long) + 1;
@@ -163,6 +172,7 @@ int MP1Node::finishUpThisNode(){
    /*
     * Your code goes here
     */
+	return 0;
 }
 
 /**
@@ -218,6 +228,96 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 	/*
 	 * Your code goes here
 	 */
+	MessageHdr *msg;
+	msg = (MessageHdr*) data;
+	switch (msg->msgType) {
+	case JOINREQ: {
+		JoinReqPkg* p = (JoinReqPkg*) data;
+		Address addr = p->adr;
+
+		log->logNodeAdd(&memberNode->addr, &addr);
+        IdPort idPort = *(IdPort*)&addr;
+		memberNode->memberList.push_back(MemberListEntry(idPort.getId(), idPort.getPort()));
+
+		// reply with JOINREP
+        vector<MemberListEntry> memberList = memberNode->memberList;
+		size_t n = memberList.size();
+        size_t msgsize = sizeof(MessageHdr) + sizeof(size_t) + n * (sizeof(MemberInfo));
+        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
+
+        // create JOINREP message: format of data is {struct Address myaddr}
+        msg->msgType = JOINREP;
+        memcpy((char *)(msg+1), &n, sizeof(size_t));
+        size_t i = 0;
+        for(vector<MemberListEntry>::iterator memberIterator = memberList.begin();
+                memberIterator != memberList.end();
+                memberIterator++) {
+        	MemberListEntry member = *memberIterator;
+        	MemberInfo memberInfo;
+        	memberInfo.id = member.id;
+        	memberInfo.port = member.port;
+        	memberInfo.heartbeat = member.heartbeat;
+            memcpy((char *)(msg+1) + sizeof(size_t) + i * sizeof(MemberInfo), &memberInfo, sizeof(MemberInfo));
+            ++i;
+        }
+
+
+#ifdef DEBUGLOG
+        static char s[1024];
+        sprintf(s, "JOINREQ received ... send JOINREP");
+        log->LOG(&memberNode->addr, s);
+#endif
+
+        // send JOINREQ message to introducer member
+        emulNet->ENsend(&memberNode->addr, &addr, (char *)msg, msgsize);
+
+        free(msg);
+	} break;
+	case JOINREP: {
+        memberNode->inGroup = true;
+#ifdef DEBUGLOG
+		log->LOG(&memberNode->addr, "JOINREP ... node has joined group");
+#endif
+		vector<MemberListEntry> memberList = memberNode->memberList;
+		size_t n = *(size_t*)(data + 1);
+		n = __bswap_32 (n);
+		for (size_t i=0; i < n; ++i) {
+			MemberInfo* memberInfo = (MemberInfo*)(data + 1 + sizeof(size_t) + i * sizeof(MemberInfo));
+			int id = __bswap_32 (memberInfo->id);
+			short port = __bswap_16 (memberInfo->port);
+			long heartbeat = __bswap_64 (memberInfo->heartbeat);
+			MemberListEntry member = MemberListEntry(MemberListEntry(id ,port));
+			memberList.push_back(member);
+		}
+
+	} break;
+	case DUMMYLASTMSGTYPE: {
+
+	} break;
+	case TEST: {
+		TestPkg* p = (TestPkg*) data;
+		Address a = p->adr;
+		const char * adr = a.getAddress().c_str();
+		log->LOG(&memberNode->addr, adr);
+
+	} break;
+	default: {
+		char* s = data;
+		int sz = size;
+#ifdef DEBUGLOG
+		log->LOG(&memberNode->addr, s);
+#endif
+
+	}
+
+	}
+	/*
+#ifdef DEBUGLOG
+    static char s[1024];
+    sprintf(s, "recvCallBack: %s", data);
+    log->LOG(&memberNode->addr, s);
+#endif*/
+    return true;
 }
 
 /**

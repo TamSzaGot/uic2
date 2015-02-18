@@ -1,0 +1,48 @@
+131
+
+ [0] APP
+ 2.0.0.0:0 [0] APP
+ 3.0.0.0:0 [0] APP
+ 4.0.0.0:0 [0] APP
+ 5.0.0.0:0 [0] APP
+ 6.0.0.0:0 [0] APP
+ 7.0.0.0:0 [0] APP
+ 8.0.0.0:0 [0] APP
+ 9.0.0.0:0 [0] APP
+ 10.0.0.0:0 [0] APP
+ 4.0.0.0:0 [0] Starting up group...
+ 3.0.0.0:0 [0] Starting up group...
+ 2.0.0.0:0 [0] Starting up group...
+ 1.0.0.0:0 [0] Trying to join...
+ 8.0.0.0:0 [1] Starting up group...
+ 7.0.0.0:0 [1] Starting up group...
+ 6.0.0.0:0 [1] Starting up group...
+ 5.0.0.0:0 [1] Starting up group...
+ 1.0.0.0:0 [1] Node 1.0.0.0:0 joined at time 1
+ 1.0.0.0:0 [1] JOINREQ received ... send JOINREP
+ 1.0.0.0:0 [1] 1:0
+ 1.0.0.0:0 [1] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [1] 1:0
+ 1.0.0.0:0 [1] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [1] 1:0
+ 1.0.0.0:0 [1] abcdefghijklmnopqrstuvxyz
+ 10.0.0.0:0 [2] Starting up group...
+ 9.0.0.0:0 [2] Starting up group...
+ 1.0.0.0:0 [2] JOINREP ... node has joined group
+ 1.0.0.0:0 [2] 1:0
+ 1.0.0.0:0 [2] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [2] 1:0
+ 1.0.0.0:0 [2] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [2] 1:0
+ 1.0.0.0:0 [2] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [2] 1:0
+ 1.0.0.0:0 [2] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [3] 1:0
+ 1.0.0.0:0 [3] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [3] 1:0
+ 1.0.0.0:0 [3] abcdefghijklmnopqrstuvxyz
+ 1.0.0.0:0 [100] Node failed at time = 100
+ 2.0.0.0:0 [100] Node failed at time = 100
+ 3.0.0.0:0 [100] Node failed at time = 100
+ 4.0.0.0:0 [100] Node failed at time = 100
+ 5.0.0.0:0 [100] Node failed at time = 100
