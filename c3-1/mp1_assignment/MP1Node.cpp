@@ -7,6 +7,7 @@
 
 #include "MP1Node.h"
 #include <byteswap.h>
+#include <sstream>
 
 /*
  * Note: You can change/add any functions in MP1Node.{h,cpp}
@@ -116,7 +117,7 @@ int MP1Node::initThisNode(Address *joinaddr) {
  * DESCRIPTION: Join the distributed system
  */
 int MP1Node::introduceSelfToGroup(Address *joinaddr) {
-	MessageHdr *msg;
+//	MessageHdr *msg;
 #ifdef DEBUGLOG
     static char s[1024];
 #endif
@@ -128,35 +129,26 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
         memberNode->inGroup = true;
 
         IdPort idPort = *(IdPort*)memberNode->addr.addr;
-		memberNode->memberList.push_back(MemberListEntry(idPort.getId(), idPort.getPort()));
-
-		// send test message to myself
-        emulNet->ENsend(&memberNode->addr, joinaddr, "abcdefghijklmnopqrstuvxyz", 26);
-
-        TestPkg testPkg;
-        testPkg.hdr.msgType = TEST;
-        testPkg.adr = *joinaddr;
-        emulNet->ENsend(&memberNode->addr, joinaddr, (char*) &testPkg, sizeof(TestPkg));
+		int id = idPort.getId();
+		short port = idPort.getPort();
+		memberNode->memberList.push_back(MemberListEntry(id, port));
+//		memberNode->memberList.push_back(MemberListEntry(idPort.getId(), idPort.getPort()));
 
     }
     else {
-        size_t msgsize = sizeof(MessageHdr) + sizeof(joinaddr->addr) + sizeof(long) + 1;
-        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
-
-        // create JOINREQ message: format of data is {struct Address myaddr}
-        msg->msgType = JOINREQ;
-        memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
-        memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
-
 #ifdef DEBUGLOG
         sprintf(s, "Trying to join...");
         log->LOG(&memberNode->addr, s);
 #endif
 
         // send JOINREQ message to introducer member
-        emulNet->ENsend(&memberNode->addr, joinaddr, (char *)msg, msgsize);
+    	JoinReqPkg joinPkg;
+    	joinPkg.hdr.msgType = JOINREQ;
+    	joinPkg.adr = memberNode->addr;
+    	joinPkg.hrt = memberNode->heartbeat;
 
-        free(msg);
+        emulNet->ENsend(&memberNode->addr, joinaddr, (char *) &joinPkg, sizeof(JoinReqPkg));
+
     }
 
     return 1;
@@ -236,19 +228,17 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 		Address addr = p->adr;
 
 		log->logNodeAdd(&memberNode->addr, &addr);
-        IdPort idPort = *(IdPort*)&addr;
-		memberNode->memberList.push_back(MemberListEntry(idPort.getId(), idPort.getPort()));
 
 		// reply with JOINREP
         vector<MemberListEntry> memberList = memberNode->memberList;
 		size_t n = memberList.size();
-        size_t msgsize = sizeof(MessageHdr) + sizeof(size_t) + n * (sizeof(MemberInfo));
-        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
 
-        // create JOINREP message: format of data is {struct Address myaddr}
-        msg->msgType = JOINREP;
-        memcpy((char *)(msg+1), &n, sizeof(size_t));
-        size_t i = 0;
+        size_t msgsize = sizeof(JoinRepPkg) + n * sizeof(MemberInfo);
+        JoinRepPkg* joinRep = (JoinRepPkg*) malloc(msgsize);
+    	joinRep->hdr.msgType = JOINREP;
+    	joinRep->n = n;
+
+    	MemberInfo *members = &joinRep->member;
         for(vector<MemberListEntry>::iterator memberIterator = memberList.begin();
                 memberIterator != memberList.end();
                 memberIterator++) {
@@ -257,10 +247,16 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
         	memberInfo.id = member.id;
         	memberInfo.port = member.port;
         	memberInfo.heartbeat = member.heartbeat;
-            memcpy((char *)(msg+1) + sizeof(size_t) + i * sizeof(MemberInfo), &memberInfo, sizeof(MemberInfo));
-            ++i;
+        	*members = memberInfo;
+            ++members;
         }
 
+        IdPort idPort = *(IdPort*)&addr;
+		int id = idPort.getId();
+		short port = idPort.getPort();
+		memberNode->memberList.push_back(MemberListEntry(id, port));
+//		memberNode->memberList.push_back(MemberListEntry(idPort.getId(), idPort.getPort()));
+		memberNode->nnb++;
 
 #ifdef DEBUGLOG
         static char s[1024];
@@ -268,28 +264,83 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
         log->LOG(&memberNode->addr, s);
 #endif
 
-        // send JOINREQ message to introducer member
-        emulNet->ENsend(&memberNode->addr, &addr, (char *)msg, msgsize);
 
-        free(msg);
+        // send JOINREP message to member
+        emulNet->ENsend(&memberNode->addr, &addr, (char *) joinRep, msgsize);
+
+        free(joinRep);
 	} break;
 	case JOINREP: {
         memberNode->inGroup = true;
 #ifdef DEBUGLOG
 		log->LOG(&memberNode->addr, "JOINREP ... node has joined group");
 #endif
-		vector<MemberListEntry> memberList = memberNode->memberList;
-		size_t n = *(size_t*)(data + 1);
-		n = __bswap_32 (n);
+		JoinRepPkg* p = (JoinRepPkg*) data;
+		size_t n = p->n;
+
+		MemberInfo* memberInfo = &((JoinRepPkg*)data)->member;
 		for (size_t i=0; i < n; ++i) {
-			MemberInfo* memberInfo = (MemberInfo*)(data + 1 + sizeof(size_t) + i * sizeof(MemberInfo));
-			int id = __bswap_32 (memberInfo->id);
+/*			int id = __bswap_32 (memberInfo->id);
 			short port = __bswap_16 (memberInfo->port);
-			long heartbeat = __bswap_64 (memberInfo->heartbeat);
-			MemberListEntry member = MemberListEntry(MemberListEntry(id ,port));
-			memberList.push_back(member);
+			MemberListEntry member = MemberListEntry(MemberListEntry(id ,port));*/
+			MemberListEntry member = MemberListEntry(MemberListEntry(memberInfo->id ,memberInfo->port));
+			memberNode->memberList.push_back(member);
+			ostringstream address;
+			address << member.id << ":" << member.port;
+			Address addr = Address(address.str());
+			log->logNodeAdd(&memberNode->addr, &addr);
+			memberNode->nnb++;
+			memberInfo++;
 		}
 
+	} break;
+	case PING: {
+		PingPkg* p = (PingPkg*) data;
+		Address addr = p->adr;
+		int a = p->member.info.id;
+		MemberStatus stat = p->member.status;
+        static char s[1024];
+        sprintf(s, "PING received from node %s, %c%d", addr.getAddress().c_str(), memberStatus(stat), a);
+        log->LOG(&memberNode->addr, s);
+
+		PongPkg pongPkg;
+		pongPkg.hdr.msgType = PONG;
+		pongPkg.adr = memberNode->addr;
+		if (memberNode->nnb > 1) {
+			size_t inode = rand() % memberNode->nnb;
+			MemberListEntry mle = memberNode->memberList[inode];
+			pongPkg.n = 1;
+			MemberInfo info;
+			info.id = mle.id; info.port = mle.port; info.heartbeat = mle.heartbeat;
+			pongPkg.member.status = ALIVE;
+			pongPkg.member.info = info;
+        } else {
+			pongPkg.n = 0;
+        }
+		emulNet->ENsend(&memberNode->addr, &addr, (char *) &pongPkg, sizeof(PingPkg));
+			/*
+		ostringstream address;
+		address << memberNode->memberList[node].id << ":" << memberNode->memberList[node].port;
+		Address addr = Address(address.str());
+*/
+		if (!inMemberList(&addr)) {
+			log->logNodeAdd(&memberNode->addr, &addr);
+	        IdPort idPort = *(IdPort*)&addr;
+			int id = idPort.getId();
+			short port = idPort.getPort();
+			memberNode->memberList.push_back(MemberListEntry(id, port));
+			memberNode->nnb++;
+
+		}
+	} break;
+	case PONG: {
+		PongPkg* p = (PongPkg*) data;
+		Address adr = p->adr;
+		int a = p->member.info.id;
+		MemberStatus stat = p->member.status;
+        static char s[1024];
+        sprintf(s, "PONG received from node %s, %c%d", adr.getAddress().c_str(), memberStatus(stat), a);
+        log->LOG(&memberNode->addr, s);
 	} break;
 	case DUMMYLASTMSGTYPE: {
 
@@ -303,7 +354,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 	} break;
 	default: {
 		char* s = data;
-		int sz = size;
+//		int sz = size;
 #ifdef DEBUGLOG
 		log->LOG(&memberNode->addr, s);
 #endif
@@ -332,6 +383,42 @@ void MP1Node::nodeLoopOps() {
 	/*
 	 * Your code goes here
 	 */
+#ifdef DEBUGLOG
+//        static char s[1024];
+//        sprintf(s, "nodeLoopOps() called, timeoutCntr = %d, pingCntr = %d, hbeat = %ld", memberNode->timeOutCounter, memberNode->pingCounter, memberNode->heartbeat);
+//        log->LOG(&memberNode->addr, s);
+#endif
+
+    // send PING message to random member
+	int neighbours = memberNode->nnb;
+	if (neighbours > 1) {
+		size_t node = rand() % memberNode->nnb;
+		size_t inode = rand() % memberNode->nnb;
+		while (inode == node) {
+			inode = rand() % memberNode->nnb;
+		}
+
+		MemberListEntry mle = memberNode->memberList[inode];
+		PingPkg pingPkg;
+		pingPkg.hdr.msgType = PING;
+		pingPkg.adr = memberNode->addr;
+		pingPkg.n = 1;
+		pingPkg.member.status = ALIVE;
+		MemberInfo info;
+		info.id = mle.id; info.port = mle.port; info.heartbeat = mle.heartbeat;
+		pingPkg.member.info = info;
+
+		if (memberNode->addr.addr[0]==1) {
+//			int dummy = 0;
+		}
+		ostringstream address;
+		address << memberNode->memberList[node].id << ":" << memberNode->memberList[node].port;
+		Address addr = Address(address.str());
+		emulNet->ENsend(&memberNode->addr, &addr, (char *) &pingPkg, sizeof(PingPkg));
+	}
+	memberNode->timeOutCounter++;
+
+
 
     return;
 }
@@ -378,4 +465,24 @@ void MP1Node::printAddress(Address *addr)
 {
     printf("%d.%d.%d.%d:%d \n",  addr->addr[0],addr->addr[1],addr->addr[2],
                                                        addr->addr[3], *(short*)&addr->addr[4]) ;    
+}
+
+char memberStatus(MemberStatus m) {
+	switch (m) {
+		case ALIVE: return 'A';
+		case SUSPECT: return 'S';
+		case DEAD: return 'D';
+	}
+	return '?';
+}
+
+bool MP1Node::inMemberList(Address* addr) {
+	IdPort idPort = IdPort(addr);
+	for (size_t i = 0; i < memberNode->memberList.size(); ++i) {
+		if (memberNode->memberList[i].id == idPort.getId() &&
+				memberNode->memberList[i].port == idPort.getPort()) {
+			return true;
+		}
+	}
+	return false;
 }

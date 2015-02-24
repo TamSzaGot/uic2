@@ -14,7 +14,6 @@
 #include "Member.h"
 #include "EmulNet.h"
 #include "Queue.h"
-#include <byteswap.h>
 
 /**
  * Macros
@@ -32,22 +31,8 @@
 enum MsgTypes{
     JOINREQ,
     JOINREP,
-	PING,
-	PONG,
-    TEST,
     DUMMYLASTMSGTYPE
 };
-
-/**
- * Member Status Types
- */
-typedef enum MemberStatus {
-    ALIVE,
-    SUSPECT,
-	DEAD,
-} MemberStatus;
-
-char memberStatus(MemberStatus m);
 
 /**
  * STRUCT NAME: MessageHdr
@@ -56,71 +41,7 @@ char memberStatus(MemberStatus m);
  */
 typedef struct MessageHdr {
 	enum MsgTypes msgType;
-} MessageHdr;
-
-/**
- * STRUCT NAME: MemberInfo
- *
- * DESCRIPTION: Address and heartbeat
- */
-typedef struct IdPort {
-	IdPort(Address* addr) {
-		IdPort idPort = *(IdPort*)addr;
-		this->_id = idPort.getId();
-		this->_port = idPort.getPort();
-	}
-//	int getId() {return __bswap_32(_id); };
-	int getId() {return _id; };
-	void setId(int id) {_id = __bswap_32(id); };
-//	short getPort() { return __bswap_16(_port); };
-	short getPort() { return _port; };
-	void setPort(short port) { _port = __bswap_16(port); };
-private:
-	int _id;
-	short _port;
-} IdPort;
-
-typedef struct MemberInfo {
-	int id;
-	short int port;
-	long heartbeat;
-} MemberInfo;
-
-typedef struct TestPkg {
-	MessageHdr hdr;
-	Address adr;
-} TestPkg;
-
-typedef struct JoinReqPkg {
-	MessageHdr hdr;
-	Address adr;
-	long hrt;
-} JoinReqPkg;
-
-typedef struct JoinRepPkg {
-	MessageHdr hdr;
-	size_t n;
-	MemberInfo member;
-} JoinRepPkg;
-
-typedef struct MemberStatusInfo {
-	MemberStatus status;
-	MemberInfo info;
-} MemberStatusInfo;
-
-typedef struct PingPkg {
-	MessageHdr hdr;
-	Address adr;
-	size_t n;
-	MemberStatusInfo member;
-} PingPkg;
-
-typedef struct PongPkg {
-	MessageHdr hdr;
-	Address adr;
-	size_t n;
-	MemberStatusInfo member;
-} PongPkg;
+}MessageHdr;
 
 /**
  * CLASS NAME: MP1Node
@@ -154,7 +75,6 @@ public:
 	Address getJoinAddress();
 	void initMemberListTable(Member *memberNode);
 	void printAddress(Address *addr);
-	bool inMemberList(Address *addr);
 	virtual ~MP1Node();
 };
 
